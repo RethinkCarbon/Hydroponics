@@ -1,0 +1,178 @@
+/* Greenhouse Control Dashboard - App Styles (White Theme) */
+
+/* Ensure proper layout */
+#root {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Smooth transitions for all interactive elements */
+button, input, select, .panel, .data-tile {
+  transition: all 0.2s ease;
+}
+
+/* Focus states for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+}
+
+/* Slider customization */
+[data-slot="slider-track"] {
+  background: #e2e8f0 !important;
+  height: 10px !important;
+  border-radius: 5px !important;
+}
+
+[data-slot="slider-range"] {
+  background: linear-gradient(90deg, #0d9488, #14b8a6) !important;
+  border-radius: 5px !important;
+}
+
+[data-slot="slider-thumb"] {
+  width: 24px !important;
+  height: 24px !important;
+  background: #0d9488 !important;
+  border: 3px solid white !important;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3) !important;
+}
+
+[data-slot="slider-thumb"]:hover {
+  transform: scale(1.15) !important;
+}
+
+/* Switch customization */
+[data-slot="switch"] {
+  width: 48px !important;
+  height: 26px !important;
+  background: #e2e8f0 !important;
+}
+
+[data-slot="switch"][data-state="checked"] {
+  background: #10b981 !important;
+}
+
+[data-slot="switch-thumb"] {
+  width: 22px !important;
+  height: 22px !important;
+  background: white !important;
+}
+
+/* Chart tooltip customization */
+.recharts-tooltip-wrapper {
+  z-index: 1000 !important;
+}
+
+/* Prevent text selection on UI elements */
+.nav-item,
+.btn-touch,
+.toggle-switch {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Pulse animation for alerts */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Tower plant pulse */
+@keyframes plant-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1366px) {
+  .nav-sidebar {
+    width: 240px;
+  }
+  
+  main {
+    margin-left: 240px !important;
+  }
+}
+
+/* Landscape mode for tablets */
+@media (orientation: landscape) and (max-height: 768px) {
+  .nav-sidebar {
+    width: 200px;
+  }
+  
+  main {
+    margin-left: 200px !important;
+  }
+  
+  .nav-item {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+
+/* Touch device optimizations */
+@media (pointer: coarse) {
+  .btn-touch {
+    min-height: 56px;
+  }
+  
+  .nav-item {
+    min-height: 52px;
+  }
+  
+  /* Larger touch targets */
+  [data-slot="slider-thumb"] {
+    width: 28px !important;
+    height: 28px !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .panel {
+    border-width: 2px;
+  }
+  
+  .data-tile {
+    border-width: 2px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .nav-sidebar {
+    display: none;
+  }
+  
+  main {
+    margin-left: 0 !important;
+  }
+}
