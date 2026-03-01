@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   AlertTriangle, 
@@ -15,7 +15,21 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import type { GreenhouseState, Alert } from '@/types/greenhouse';
+
+function mapRowToAlert(row: { id: string; type: string; message: string; device: string | null; acknowledged: boolean; action_target: unknown; created_at: string }): Alert {
+  return {
+    id: row.id,
+    type: row.type as Alert['type'],
+    message: row.message,
+    timestamp: new Date(row.created_at),
+    acknowledged: row.acknowledged,
+    device: row.device ?? undefined,
+    actionTarget: row.action_target as Alert['actionTarget'],
+  };
+}
 
 /** Derive where an alert should link when actionTarget is not set */
 function getAlertAction(alert: Alert): { view: string; label: string; secondaryActionKey?: 'startFlush' | 'stopIrrigation' } | null {
@@ -149,14 +163,44 @@ function AlertItem({ alert, onAcknowledge, onViewChange, onStartFlush, onStopIrr
 }
 
 export function AlertsPage({ state, onViewChange, actions }: AlertsPageProps) {
+  const { session } = useAuth();
+  const [supabaseAlerts, setSupabaseAlerts] = useState<Alert[] | null>(null);
   const [notifications, setNotifications] = useState({
     sms: false,
     push: true,
     email: true
   });
 
-  const activeAlerts = state.alerts.filter(a => !a.acknowledged);
-  const acknowledgedAlerts = state.alerts.filter(a => a.acknowledged);
+  useEffect(() => {
+    if (!session) {
+      setSupabaseAlerts(null);
+      return;
+    }
+    supabase
+      .from('alerts')
+      .select('id, type, message, device, acknowledged, action_target, created_at')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          setSupabaseAlerts(null);
+          return;
+        }
+        setSupabaseAlerts((data ?? []).map(mapRowToAlert));
+      });
+  }, [session]);
+
+  const alerts = supabaseAlerts !== null ? supabaseAlerts : state.alerts;
+  const activeAlerts = alerts.filter(a => !a.acknowledged);
+  const acknowledgedAlerts = alerts.filter(a => a.acknowledged);
+
+  const handleAcknowledge = async (alert: Alert) => {
+    if (supabaseAlerts !== null) {
+      await supabase.from('alerts').update({ acknowledged: true }).eq('id', alert.id);
+      setSupabaseAlerts(prev => prev ? prev.map(a => a.id === alert.id ? { ...a, acknowledged: true } : a) : null);
+    } else {
+      actions.acknowledgeAlert(alert.id);
+    }
+  };
 
   return (
     <div className="p-0 sm:p-6 space-y-4 sm:space-y-6">
@@ -258,7 +302,7 @@ export function AlertsPage({ state, onViewChange, actions }: AlertsPageProps) {
             {activeAlerts.length > 0 && (
               <button
                 type="button"
-                onClick={() => activeAlerts.forEach(a => actions.acknowledgeAlert(a.id))}
+                onClick={() => activeAlerts.forEach(a => handleAcknowledge(a))}
                 className="text-sm text-teal-600 hover:text-teal-700 font-medium"
               >
                 Acknowledge All
@@ -277,7 +321,7 @@ export function AlertsPage({ state, onViewChange, actions }: AlertsPageProps) {
                 <AlertItem
                   key={alert.id}
                   alert={alert}
-                  onAcknowledge={() => actions.acknowledgeAlert(alert.id)}
+                  onAcknowledge={() => handleAcknowledge(alert)}
                   onViewChange={onViewChange}
                   onStartFlush={actions.setManualFlush ? () => actions.setManualFlush?.(true) : undefined}
                   onStopIrrigation={actions.stopIrrigation}

@@ -17,28 +17,18 @@ import { MarketPricesPage } from '@/components/dashboard/MarketPricesPage';
 import { SalesPage } from '@/components/dashboard/SalesPage';
 import { EconomicsPage } from '@/components/dashboard/EconomicsPage';
 import { InventoryPage } from '@/components/dashboard/InventoryPage';
+import { useAuth } from '@/contexts/AuthContext';
 import { useGreenhouseData } from '@/hooks/useGreenhouseData';
-import type { UserRole } from '@/types/greenhouse';
 import './App.css';
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userRole, setUserRole] = useState<UserRole>('operator');
+  const { session, profile, loading: authLoading, signOut } = useAuth();
   const [activeView, setActiveView] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const { state, trendData, activeAlertsCount, criticalAlertsCount, actions } = useGreenhouseData();
 
-  const handleLogin = (role: UserRole) => {
-    setUserRole(role);
-    setIsLoggedIn(true);
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserRole('operator');
-    setActiveView('overview');
-  };
+  const userRole = profile?.role ?? 'operator';
 
   const renderView = () => {
     switch (activeView) {
@@ -78,8 +68,16 @@ function App() {
     }
   };
 
-  if (!isLoggedIn) {
-    return <LoginModal onLogin={handleLogin} />;
+  if (authLoading) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-100">
+        <div className="w-8 h-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <LoginModal />;
   }
 
   return (
@@ -91,7 +89,7 @@ function App() {
         userRole={userRole}
         activeAlertsCount={activeAlertsCount}
         criticalAlertsCount={criticalAlertsCount}
-        onLogout={handleLogout}
+        onLogout={signOut}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
