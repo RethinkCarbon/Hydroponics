@@ -7,6 +7,7 @@ import { healthRouter } from './routes/health.js';
 import { sensorsRouter } from './routes/sensors.js';
 import { controlRouter } from './routes/control.js';
 import { alertsRouter } from './routes/alerts.js';
+import { authRouter } from './routes/auth.js';
 import { runCirculationTick } from './lib/runCirculationTick.js';
 import { runShadeControl } from './lib/runShadeControl.js';
 import { runVentControl } from './lib/runVentControl.js';
@@ -34,6 +35,7 @@ app.get('/', (_req, res) => {
     sensors: 'POST /api/sensors/ingest',
     control: 'POST /api/control/flush | /irrigation/stop | /emergency/stop | /emergency/reset',
     alerts: 'POST /api/alerts, PATCH /api/alerts/:id/acknowledge',
+    auth: 'POST /api/auth/signup',
   },
 });
 });
@@ -42,6 +44,7 @@ app.use('/api/health', healthRouter);
 app.use('/api/sensors', sensorsRouter);
 app.use('/api/control', controlRouter);
 app.use('/api/alerts', alertsRouter);
+app.use('/api/auth', authRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);

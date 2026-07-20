@@ -23,7 +23,6 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const ADMIN_EMAIL = 'admin@planetive.org';
-const ADMIN_PASSWORD = 'Admin123';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -69,29 +68,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = useCallback(async (email: string, password: string, asRole?: UserRole) => {
-    const isHardcodedAdmin = email === ADMIN_EMAIL && password === ADMIN_PASSWORD;
     if (asRole) setLoginAs(asRole);
-    if (isHardcodedAdmin) setLoginAs('admin');
+    if (email.trim().toLowerCase() === ADMIN_EMAIL && asRole === 'admin') setLoginAs('admin');
 
-    let result = await supabase.auth.signInWithPassword({ email, password });
-    if (result.error && isHardcodedAdmin) {
-      await supabase.auth.signUp({
-        email: ADMIN_EMAIL,
-        password: ADMIN_PASSWORD,
-        options: { data: { full_name: 'Administrator' } },
-      });
-      result = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    const result = await supabase.auth.signInWithPassword({ email, password });
+    if (result.error) {
+      const msg = result.error.message;
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        return {
+          error: new Error(
+            'Invalid email or password. For the default admin account, run `npm run seed:admin` in the server folder (once), then sign in with admin@planetive.org.',
+          ),
+        };
+      }
+      return { error: result.error };
     }
-    return { error: result.error ?? null };
+    return { error: null };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
+    const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3001';
+
+    // Prefer backend (service role) — bypasses Supabase public signup rate limits
+    try {
+      const res = await fetch(`${apiBase}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, displayName, role: 'operator' }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (res.ok) return { error: null };
+      return { error: new Error(body.error || `Sign up failed (${res.status})`) };
+    } catch {
+      // Backend not running — try public Supabase signup
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: displayName || email } },
     });
-    return { error: error ?? null };
+    if (error) {
+      const status = (error as { status?: number }).status;
+      if (status === 429 || /too many requests|rate limit/i.test(error.message)) {
+        return {
+          error: new Error(
+            'Sign-up rate-limited by Supabase. Start the API (`cd server && npm run dev`), then try again.',
+          ),
+        };
+      }
+      return { error };
+    }
+    return { error: null };
   }, []);
 
   const signOut = useCallback(async () => {

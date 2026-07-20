@@ -33,7 +33,8 @@ export function LoginModal() {
         setError(err.message);
         return;
       }
-      setMessage('Check your email to confirm your account, then sign in.');
+      setMessage('Account created. You can sign in now.');
+      setIsSignUp(false);
       return;
     }
 
