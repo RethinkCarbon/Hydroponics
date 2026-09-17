@@ -16,7 +16,12 @@ authRouter.post('/signup', async (req, res) => {
       typeof req.body?.displayName === 'string' && req.body.displayName.trim()
         ? req.body.displayName.trim()
         : email;
-    const role = req.body?.role === 'admin' ? 'admin' : 'operator';
+    // Public signup never creates admins — use `npm run seed:admin` for that
+    if (req.body?.role === 'admin') {
+      res.status(403).json({ error: 'Admin accounts cannot be created via signup.' });
+      return;
+    }
+    const role = 'operator' as const;
 
     if (!email || !password) {
       res.status(400).json({ error: 'email and password are required' });

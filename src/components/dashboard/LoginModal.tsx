@@ -9,18 +9,43 @@ const LOGIN_AS_OPTIONS: { value: UserRole; label: string }[] = [
 ];
 
 export function LoginModal() {
-  const { signIn } = useAuth();
+  const { signIn, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [loginAs, setLoginAs] = useState<UserRole>('operator');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setMessage(null);
     setIsLoading(true);
+
+    if (isSignUp) {
+      const { error: err, needsEmailConfirm } = await signUp(
+        email,
+        password,
+        displayName || undefined,
+      );
+      setIsLoading(false);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      if (needsEmailConfirm) {
+        setMessage('Account created. Check your email to confirm, then sign in.');
+        setIsSignUp(false);
+        return;
+      }
+      setMessage('Account created. You can sign in now.');
+      setIsSignUp(false);
+      return;
+    }
 
     const { error: err } = await signIn(email, password, loginAs);
     setIsLoading(false);
@@ -37,7 +62,9 @@ export function LoginModal() {
             <Shield className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-slate-800 mb-1">Greenhouse Control</h1>
-          <p className="text-slate-500">Sign in to continue</p>
+          <p className="text-slate-500">
+            {isSignUp ? 'Create an operator account' : 'Sign in to continue'}
+          </p>
         </div>
 
         {error && (
@@ -45,25 +72,48 @@ export function LoginModal() {
             {error}
           </div>
         )}
+        {message && (
+          <div className="mb-4 p-3 rounded-lg bg-teal-50 border border-teal-200 text-sm text-teal-700">
+            {message}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-sm text-slate-600 mb-1 block">Log in as</label>
-            <div className="relative">
-              <UserCog className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <select
-                value={loginAs}
-                onChange={(e) => setLoginAs(e.target.value as UserRole)}
-                className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 focus:outline-none transition-all appearance-none cursor-pointer"
-              >
-                {LOGIN_AS_OPTIONS.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
+          {isSignUp && (
+            <div>
+              <label className="text-sm text-slate-600 mb-1 block">Display name</label>
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Your name"
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 focus:outline-none transition-all"
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {!isSignUp && (
+            <div>
+              <label className="text-sm text-slate-600 mb-1 block">Log in as</label>
+              <div className="relative">
+                <UserCog className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <select
+                  value={loginAs}
+                  onChange={(e) => setLoginAs(e.target.value as UserRole)}
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 focus:border-teal-500 focus:ring-2 focus:ring-teal-100 focus:outline-none transition-all appearance-none cursor-pointer"
+                >
+                  {LOGIN_AS_OPTIONS.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="text-sm text-slate-600 mb-1 block">Email</label>
@@ -113,11 +163,26 @@ export function LoginModal() {
             ) : (
               <>
                 <Shield className="w-5 h-5" />
-                Sign In
+                {isSignUp ? 'Sign Up' : 'Sign In'}
               </>
             )}
           </button>
         </form>
+
+        <p className="text-center text-sm text-slate-500 mt-4">
+          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignUp(!isSignUp);
+              setError(null);
+              setMessage(null);
+            }}
+            className="text-teal-600 hover:text-teal-700 font-medium"
+          >
+            {isSignUp ? 'Sign in' : 'Sign up'}
+          </button>
+        </p>
       </div>
     </div>
   );

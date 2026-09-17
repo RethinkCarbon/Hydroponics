@@ -12,6 +12,16 @@
    - **anon public** key → use for `VITE_SUPABASE_ANON_KEY`
    - **service_role** key → use for `SUPABASE_SERVICE_ROLE_KEY` (keep this secret; backend only)
 7. In the project root, copy `.env.example` to `.env` and paste in those values.
+8. Also set `VITE_API_URL` to your backend URL (local: `http://localhost:3001`). Signup prefers the API so new users are **email-confirmed** and can sign in immediately.
+
+### Auth (login / signup)
+
+- **Sign in / Sign up** use Supabase Auth. Profiles + roles live in `public.profiles`.
+- For a ready admin account: `cd server && npm run seed:admin`  
+  Default: `admin@planetive.org` / `Admin123` (override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`).
+- Keep the **API server running** for signup (`cd server && npm run dev`). If it is down, the app falls back to public Supabase signup (may require email confirmation if that is enabled in the dashboard).
+- Signup always creates **operator** accounts. Admins are created only with `npm run seed:admin`.
+- In Supabase → **Authentication → Providers → Email**, you can turn **Confirm email** off for local/dev if you rely only on public signup.
 
 ---
 
