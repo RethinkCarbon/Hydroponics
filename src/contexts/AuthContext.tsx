@@ -26,11 +26,18 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const LOCAL_AUTH_KEY = 'hydroponics_auth'; // clear old hardcoded sessions
+const LOCAL_AUTH_KEY = 'hydroponics_auth';
 const LOGIN_AS_KEY = 'hydroponics_login_as';
+
+const EMAIL_CONFIRM_REQUIRED =
+  'Please confirm your email before signing in. Check your inbox for the confirmation link.';
 
 function apiBase(): string {
   return (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3001';
+}
+
+function isEmailConfirmed(user: User | null | undefined): boolean {
+  return Boolean(user?.email_confirmed_at);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -47,6 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
   const [loading, setLoading] = useState(true);
 
+  const clearLocalSession = useCallback(() => {
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+  }, []);
+
   const fetchProfile = useCallback(async (userId: string) => {
     const { data, error } = await supabase
       .from('profiles')
@@ -55,7 +68,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (error || !data) {
-      // Profile may lag a moment after signup trigger — use safe defaults
       setProfile({
         id: userId,
         role: 'operator',
@@ -73,32 +85,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const applySession = useCallback(
+    async (s: Session | null) => {
+      if (s?.user && !isEmailConfirmed(s.user)) {
+        await supabase.auth.signOut();
+        clearLocalSession();
+        return;
+      }
+      setSession(s);
+      setUser(s?.user ?? null);
+      if (s?.user) fetchProfile(s.user.id);
+      else setProfile(null);
+    },
+    [clearLocalSession, fetchProfile],
+  );
+
   useEffect(() => {
-    // Remove legacy local-only auth so it doesn't confuse users
     try {
       localStorage.removeItem(LOCAL_AUTH_KEY);
     } catch {
       /* ignore */
     }
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) fetchProfile(s.user.id);
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      await applySession(s);
       setLoading(false);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) fetchProfile(s.user.id);
-      else setProfile(null);
+      void applySession(s);
     });
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile]);
+  }, [applySession]);
 
   const signIn = useCallback(async (email: string, password: string, asRole?: UserRole) => {
     const preferred: UserRole = asRole === 'admin' ? 'admin' : 'operator';
@@ -109,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -120,111 +141,90 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: new Error('Invalid email or password.') };
       }
       if (msg.includes('email not confirmed')) {
-        return {
-          error: new Error(
-            'Email not confirmed. Confirm your email in Supabase, or ask an admin to create your account via the API.',
-          ),
-        };
+        return { error: new Error(EMAIL_CONFIRM_REQUIRED) };
       }
       return { error };
     }
+
+    if (!isEmailConfirmed(data.user)) {
+      await supabase.auth.signOut();
+      return { error: new Error(EMAIL_CONFIRM_REQUIRED) };
+    }
+
     return { error: null };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
-    // Public signup is always operator — admin accounts are created via seed:admin only
     const role: UserRole = 'operator';
+    const trimmedEmail = email.trim();
 
-    // Prefer backend (service role) so account is confirmed and usable immediately
-    try {
-      const res = await fetch(`${apiBase()}/api/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-          displayName: displayName?.trim() || undefined,
-          role,
-        }),
-      });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.ok) {
-        // Auto sign-in after successful API signup
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-        if (signInError) {
-          return {
-            error: null,
-            needsEmailConfirm: false,
-          };
-        }
-        setLoginAs(role);
-        try {
-          localStorage.setItem(LOGIN_AS_KEY, role);
-        } catch {
-          /* ignore */
-        }
-        return { error: null };
-      }
-      // Known client errors from API — don't fall through
-      if (res.status >= 400 && res.status < 500) {
-        return { error: new Error(body.error || `Sign up failed (${res.status})`) };
-      }
-    } catch {
-      // Backend unreachable — fall back to public Supabase signup
-    }
-
+    // Prefer public signup so Supabase sends the confirmation email
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: trimmedEmail,
       password,
       options: {
         data: {
-          full_name: displayName?.trim() || email.trim(),
+          full_name: displayName?.trim() || trimmedEmail,
           role,
         },
       },
     });
 
-    if (error) {
-      const status = (error as { status?: number }).status;
-      if (status === 429 || /too many requests|rate limit/i.test(error.message)) {
+    if (!error) {
+      // Never keep an unconfirmed session after signup
+      if (data.session) {
+        await supabase.auth.signOut();
+      }
+      return { error: null, needsEmailConfirm: true };
+    }
+
+    const status = (error as { status?: number }).status;
+    const rateLimited = status === 429 || /too many requests|rate limit/i.test(error.message);
+
+    // Fallback: API creates unconfirmed user (no auto-login)
+    if (rateLimited) {
+      try {
+        const res = await fetch(`${apiBase()}/api/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: trimmedEmail,
+            password,
+            displayName: displayName?.trim() || undefined,
+            role,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        if (res.ok) {
+          await supabase.auth.signOut();
+          // Ask Supabase to send / resend the confirmation email
+          await supabase.auth.resend({ type: 'signup', email: trimmedEmail });
+          return { error: null, needsEmailConfirm: true };
+        }
+        return { error: new Error(body.error || `Sign up failed (${res.status})`) };
+      } catch {
         return {
           error: new Error(
-            'Sign-up rate-limited by Supabase. Start the API (`cd server && npm run dev`) and try again.',
+            'Sign-up rate-limited by Supabase. Wait a few minutes, or start the API (`cd server && npm run dev`) and try again.',
           ),
         };
       }
-      return { error };
     }
 
-    // If session exists, email confirmation is off and user is logged in
-    if (data.session) {
-      setLoginAs(role);
-      try {
-        localStorage.setItem(LOGIN_AS_KEY, role);
-      } catch {
-        /* ignore */
-      }
-      return { error: null };
-    }
-
-    return { error: null, needsEmailConfirm: true };
+    return { error };
   }, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setProfile(null);
+    clearLocalSession();
     setLoginAs('operator');
     try {
       localStorage.removeItem(LOGIN_AS_KEY);
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [clearLocalSession]);
 
-  // Admin UI only if profiles.role is admin; "Log in as" can drop an admin to operator view
   const effectiveRole: UserRole =
     profile?.role === 'admin' ? (loginAs === 'operator' ? 'operator' : 'admin') : 'operator';
 

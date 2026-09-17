@@ -5,8 +5,8 @@ export const authRouter = Router();
 
 /**
  * POST /api/auth/signup
- * Creates a confirmed user via service role (avoids public /auth/v1/signup rate limits).
- * Body: { email, password, displayName?, role?: 'admin' | 'operator' }
+ * Creates an unconfirmed operator. User must confirm email before login.
+ * Body: { email, password, displayName? }
  */
 authRouter.post('/signup', async (req, res) => {
   try {
@@ -35,7 +35,7 @@ authRouter.post('/signup', async (req, res) => {
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: { full_name: displayName, role },
     });
 
@@ -55,7 +55,8 @@ authRouter.post('/signup', async (req, res) => {
       id: data.user?.id,
       email: data.user?.email,
       role,
-      message: 'Account created. You can sign in now.',
+      needsEmailConfirm: true,
+      message: 'Account created. Check your email to confirm, then sign in.',
     });
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : 'Internal error' });

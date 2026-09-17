@@ -42,7 +42,7 @@ export function LoginModal() {
         setIsSignUp(false);
         return;
       }
-      setMessage('Account created. You can sign in now.');
+      setMessage('Account created. Check your email to confirm, then sign in.');
       setIsSignUp(false);
       return;
     }

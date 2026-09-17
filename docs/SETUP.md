@@ -19,9 +19,9 @@
 - **Sign in / Sign up** use Supabase Auth. Profiles + roles live in `public.profiles`.
 - For a ready admin account: `cd server && npm run seed:admin`  
   Default: `admin@planetive.org` / `Admin123` (override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`).
-- Keep the **API server running** for signup (`cd server && npm run dev`). If it is down, the app falls back to public Supabase signup (may require email confirmation if that is enabled in the dashboard).
 - Signup always creates **operator** accounts. Admins are created only with `npm run seed:admin`.
-- In Supabase → **Authentication → Providers → Email**, you can turn **Confirm email** off for local/dev if you rely only on public signup.
+- **Confirm email** must be enabled in Supabase → **Authentication → Providers → Email**. Users cannot sign in until they click the confirmation link. Seeded admin accounts are confirmed automatically.
+- Keep the **API server running** as a signup fallback when public signup is rate-limited (`cd server && npm run dev`).
 
 ---
 
